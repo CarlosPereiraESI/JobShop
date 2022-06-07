@@ -3,7 +3,6 @@ from flask import Flask, abort, jsonify, request
 app = Flask(__name__)
 
 simulations = [{'id': 0, 'nmachines': 1, 'njobs': 1, 'nops': 1}]
-ops = []
 jobs = []
 
 @app.route("/sims", methods=['GET'])
@@ -30,7 +29,7 @@ def create_sims():
 def delete_sim(id_sim):
     simulation = [simulation for simulation in simulations if simulation['id'] == id_sim]
     if len(simulation) == 0:
-        abort(404)
+        return jsonify({'Error': "Simulation not found"}), 404
     simulations.remove(simulation[0])
     return jsonify({'result': True})
 
@@ -39,11 +38,14 @@ def delete_sim(id_sim):
 def add_op(id_sim, id_job):
     simulation = [simulation for simulation in simulations if simulation['id'] == id_sim]
     if len(simulation) == 0:
-        return jsonify({'result': "Simulation not found"}), 404
+        return jsonify({'Error': "Simulation not found"}), 404
 
     numjobs = simulation[0]['njobs']
-    numops = simulation[0]['nops']
+    numops = simulation[0]['nops']   
     
+    if (id_job < 0) or (id_job > numjobs):
+        return jsonify({'Error': "Job not found"}), 404
+
     if not request.json or not 'id_op' or (request.json['id_op'] > numops) or not 'machine' or not 'time' in request.json:
         abort(400)
     operation = {
@@ -52,23 +54,74 @@ def add_op(id_sim, id_job):
         'time': request.json['time'],
     }
 
-    for y in jobs:
-        for x in y['operations']:
-            if x['id_op'] == request.json['id_op']:
-                return jsonify({'result': "Operation Already Exists"})
+    job = [job for job in jobs if job['id'] == id_job]
 
-    job = {
+    if len(job) == 0:
+        job = {
         'id': id_job,
-         'operations': [operation]
-    }
-    jobs.append(job)   
-    return jsonify({'operation': operation})
-    # else:
-    #     return jsonify({'result': "Operation Already Exists"}), 500
+        'operations': [operation]
+        }
+        jobs.append(job)
+    else:
+        for y in job[0]['operations']:
+            if (y['id_op'] == operation['id_op']):
+                return jsonify({'Error': "Operation Already Exists"}), 500
+        job[0]['operations'].append(operation)
 
-@app.route("/table", methods=['GET'])
-def table():
+    return jsonify({'operation': operation})
+
+@app.route("/createtable/<int:id_sim>", methods=['POST'])
+def table(id_sim):
+    simulation = [simulation for simulation in simulations if simulation['id'] == id_sim]
+    if len(simulation) == 0:
+        return jsonify({'Error': "Simulation not found"}), 404
+
+    numops = simulation[0]['nops']
+
+    n = 0
+    faults = False
+    exists = False
+    numbers = []
+    misses = []
+    while(n < numops):
+        numbers.append(n)
+        n += 1
+    
+    for x in jobs:       
+        for i in numbers:     
+            for y in x['operations']:        
+                if y['id_op'] == i:
+                    exists = True
+            if (exists == False):
+                misses.append({'job': x['id'], 'operation': i})
+                faults = True
+            exists = False 
+    if (faults == False):
+        return jsonify({'result': "Success, Table Completed!"}), 201
+    else:
+        return jsonify({'result': "Operation Missing", 'operations_missing': misses}), 500
+
+@app.route("/jobs", methods=['GET'])
+def list_table():
     return jsonify({'jobs': jobs})
+
+@app.route("/updatetable/<int:id_job>/<int:id_op>", methods=['PUT'])
+def update_op(id_job, id_op):
+    if not request.json or not 'machine' or not 'time' in request.json:
+        abort(400)
+
+    job = [job for job in jobs if job['id'] == id_job]
+
+    if len(job) == 0:
+        return jsonify({'Error': "Operation not found"}), 404
+    else:
+        op = [op for op in job[0]['operations'] if op['id_op'] == id_op]
+        if len(op) == 0:
+            return jsonify({'Error': "Operation not found"}), 404
+        else:
+            op[0]['machine'] = request.json.get('machine', op[0]['machine'])
+            op[0]['time'] = request.json.get('time', op[0]['time'])
+            return jsonify({'machine': request.json['machine'], 'time': request.json['time']}), 201
 
 if __name__ == '__main__':
     app.run(debug=True)
