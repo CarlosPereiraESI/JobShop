@@ -81,6 +81,8 @@ def add_op(id_sim, id_job):
         for y in job[0]['operations']:
             if (y['id_op'] == operation['id_op']):
                 return jsonify({'Error': "Operation Already Exists"}), 500
+            if(y['machine'] == operation['machine']):
+                return jsonify({'Error': "Machine Already Exists"}), 500
         job[0]['operations'].append(operation)
 
     return jsonify({'operation': operation})
@@ -154,8 +156,7 @@ def read_op(id_job, id_op):
         else:
             return jsonify({'machine': op[0]['machine'], 'time': op[0]['time']}), 201
 
-
-@app.route('/downloadtable', methods=['GET'])
+@app.route("/downloadtable", methods=['GET'])
 def download_table():
     f = open("src/table.txt", "w")
     
@@ -166,7 +167,38 @@ def download_table():
     f.close()
     path = "table.txt"
     return send_file(path, as_attachment=True)
-    
+
+@app.route("/addstart/<int:id_job>/<int:id_op>", methods=['POST'])
+def add_start(id_job, id_op):
+    if not request.json or not 'start_time' in request.json:
+            abort(400)
+    if 'start_time' in request.json and type(request.json['start_time']) is not int:
+        abort(400)
+
+    job = [job for job in jobs if job['id'] == id_job]
+    if len(job) == 0:
+        return jsonify({'Error': "Job not found"}), 404
+    else:
+        op = [op for op in job[0]['operations'] if op['id_op'] == id_op]
+        if len(op) == 0:
+            return jsonify({'Error': "Operation not found"}), 404
+
+    sum = 0
+    for i in jobs:
+        for y in i['operations']:
+            if(id_op == 0):
+                y['start_time'] = request.json['start_time']
+                return jsonify({'start_time': y['start_time']}), 201
+            if "start_time" in y:
+                sum += (y['time'] + y['start_time'])
+
+        if request.json['start_time'] <= sum:
+            return jsonify({'Error': "Invalid Start Time"}), 500
+        else:
+            y['start_time'] = request.json['start_time']
+            return jsonify({'start_time': y['start_time']}), 201
+
+    return jsonify({'start_time': op[0]['start_time']})
 
 if __name__ == '__main__':
     app.run(debug=True)
