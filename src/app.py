@@ -1,4 +1,5 @@
-from flask import Flask, abort, jsonify, request
+from flask import Flask, abort, jsonify, request, send_file
+import json
 
 app = Flask(__name__)
 
@@ -13,6 +14,13 @@ def list_sims():
 def create_sims():
     if not request.json or not 'nmachines' or not 'njobs' or not 'nops' in request.json:
         abort(400)
+    if 'nmachines' in request.json and type(request.json['nmachines']) is not int:
+        abort(400)
+    if 'njobs' in request.json and type(request.json['njobs']) is not int:
+        abort(400)
+    if 'nops' in request.json and type(request.json['nops']) is not int:
+        abort(400)
+
     simulation = {
         'id': simulations[-1]['id'] + 1,
         'nmachines': request.json['nmachines'],
@@ -48,6 +56,13 @@ def add_op(id_sim, id_job):
 
     if not request.json or not 'id_op' or (request.json['id_op'] > numops) or not 'machine' or not 'time' in request.json:
         abort(400)
+    if 'id_op' in request.json and type(request.json['id_op']) is not int:
+        abort(400)
+    if 'machine' in request.json and type(request.json['machine']) is not int:
+        abort(400)
+    if 'time' in request.json and type(request.json['time']) is not int:
+        abort(400)
+
     operation = {
         'id_op': request.json['id_op'],
         'machine': request.json['machine'],
@@ -74,7 +89,7 @@ def add_op(id_sim, id_job):
 def table(id_sim):
     simulation = [simulation for simulation in simulations if simulation['id'] == id_sim]
     if len(simulation) == 0:
-        return jsonify({'Error': "Simulation not found"}), 404
+        return jsonify({'Error': "Simulation not found"}), 400
 
     numops = simulation[0]['nops']
 
@@ -109,6 +124,10 @@ def list_table():
 def update_op(id_job, id_op):
     if not request.json or not 'machine' or not 'time' in request.json:
         abort(400)
+    if 'machine' in request.json and type(request.json['machine']) is not int:
+        abort(400)
+    if 'time' in request.json and type(request.json['time']) is not int:
+        abort(400)
 
     job = [job for job in jobs if job['id'] == id_job]
 
@@ -123,5 +142,32 @@ def update_op(id_job, id_op):
             op[0]['time'] = request.json.get('time', op[0]['time'])
             return jsonify({'machine': request.json['machine'], 'time': request.json['time']}), 201
 
+@app.route("/readop/<int:id_job>/<int:id_op>", methods=['GET'])
+def read_op(id_job, id_op):
+    job = [job for job in jobs if job['id'] == id_job]
+    if len(job) == 0:
+        return jsonify({'Error': "Operation not found"}), 404
+    else:
+        op = [op for op in job[0]['operations'] if op['id_op'] == id_op]
+        if len(op) == 0:
+            return jsonify({'Error': "Operation not found"}), 404
+        else:
+            return jsonify({'machine': op[0]['machine'], 'time': op[0]['time']}), 201
+
+
+@app.route('/downloadtable', methods=['GET'])
+def download_table():
+    f = open("src/table.txt", "w")
+    
+    for i in jobs:
+        for y in i['operations']:
+            f.write('(%s, %s)\t' % ((str)(y['machine']), (str)(y['time'])))
+        f.write("\n")
+    f.close()
+    path = "table.txt"
+    return send_file(path, as_attachment=True)
+    
+
 if __name__ == '__main__':
     app.run(debug=True)
+
