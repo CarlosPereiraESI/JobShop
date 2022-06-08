@@ -1,5 +1,7 @@
 from flask import Flask, abort, jsonify, request, send_file
-import json
+import collections
+from ortools.sat.python import cp_model
+
 
 app = Flask(__name__)
 
@@ -175,30 +177,38 @@ def add_start(id_job, id_op):
     if 'start_time' in request.json and type(request.json['start_time']) is not int:
         abort(400)
 
+    start_time = request.json['start_time']
     job = [job for job in jobs if job['id'] == id_job]
     if len(job) == 0:
         return jsonify({'Error': "Job not found"}), 404
     else:
         op = [op for op in job[0]['operations'] if op['id_op'] == id_op]
+        machine = op[0]['machine']
         if len(op) == 0:
             return jsonify({'Error': "Operation not found"}), 404
-
     sum = 0
+    start_work = 1000
+    end_work = 0
+
     for i in jobs:
+        sum_other_jobs = 0
         for y in i['operations']:
-            if(id_op == 0):
-                y['start_time'] = request.json['start_time']
-                return jsonify({'start_time': y['start_time']}), 201
-            if "start_time" in y:
+            if("start_time" in y) and (id_job == i['id']):
                 sum += (y['time'] + y['start_time'])
-
-        if request.json['start_time'] <= sum:
+            if((id_job != i['id'])):
+                sum_other_jobs += (y['time'] + y['start_time'])
+                if(y['machine'] == machine):
+                    start_work = sum_other_jobs - y['time']
+                    end_work = sum_other_jobs
+        
+        print(sum_other_jobs)
+        print(start_work)
+        print(end_work)
+        if (start_time >= sum) and ((start_time < start_work) or (start_time > end_work)):
+            op[0]['start_time'] = start_time
+            return jsonify({'start_time': start_time}), 201
+        else:                
             return jsonify({'Error': "Invalid Start Time"}), 500
-        else:
-            y['start_time'] = request.json['start_time']
-            return jsonify({'start_time': y['start_time']}), 201
-
-    return jsonify({'start_time': op[0]['start_time']})
 
 if __name__ == '__main__':
     app.run(debug=True)
