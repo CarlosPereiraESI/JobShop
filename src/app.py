@@ -210,6 +210,36 @@ def add_start(id_job, id_op):
         else:                
             return jsonify({'Error': "Invalid Start Time"}), 500
 
+@app.route("/verifyplan", methods=['GET'])
+def verify_plan():
+    fault = False
+    total = 0
+    for x in jobs:          
+        for y in x['operations']:    
+            total += y['time'] + y['start_time']
+            if "start_time" not in y:
+                fault = True
+    if fault:
+        return jsonify({'Error': "Start Time Missing"}), 500
+    else:
+        return jsonify({'result': "Success, Table Completed!", 'total': total}), 200
+
+@app.route("/downloadplan", methods=['GET'])
+def download_plan():
+    f = open("src/plan.txt", "w")
+
+    for i in jobs:
+        for y in i['operations']:
+            start = y['start_time']
+            duration = y['time']
+            end = start + duration
+            f.write('job(%s) op(%s) machine(%s) start(%s) duration(%s) end(%s)' % ((str)(i['id']), (str)(y['id_op']), (str)(y['machine']),
+            (str)(start), (str)(duration), (str)(end)))
+            f.write("\n")
+    f.close()
+    path = "plan.txt"
+    return send_file(path, as_attachment=True)
+
 if __name__ == '__main__':
     app.run(debug=True)
 
